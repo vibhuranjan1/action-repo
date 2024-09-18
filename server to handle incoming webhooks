@@ -1,0 +1,92 @@
+const express = require('express');
+const bodyParser = require('body-parser');
+const mongoose = require('mongoose');
+const cors = require('cors');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Connect to MongoDB
+mongoose.connect('mongodb://localhost:27017/github_events', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+});
+
+// Define a schema and model for storing events
+const eventSchema = new mongoose.Schema({
+  author: String,
+  from_branch: String,
+  to_branch: String,
+  event_type: String,
+  timestamp: { type: Date, default: Date.now },
+});
+
+const Event = mongoose.model('Event', eventSchema);
+
+// Middleware
+app.use(cors());
+app.use(bodyParser.json());
+
+// Webhook endpoint
+app.post('/webhook', async (req, res) => {
+  const eventType = req.headers['x-github-event'];
+  const { sender, ref, ref_type, base, head, created_at } = req.body;
+
+  let newEvent;
+
+  switch (eventType) {
+    case 'push':
+      newEvent = new Event({
+        author: sender.login,
+        from_branch: ref,
+        to_branch: ref, // In a push, from_branch and to_branch can be considered the same
+        event_type: 'push',
+        timestamp: new Date(created_at),
+      });
+      break;
+
+    case 'pull_request':
+      if (req.body.action === 'opened') {
+        newEvent = new Event({
+          author: sender.login,
+          from_branch: head.ref,
+          to_branch: base.ref,
+          event_type: 'pull_request',
+          timestamp: new Date(created_at),
+        });
+      }
+      break;
+
+    case 'pull_request_review':
+      if (req.body.action === 'submitted' && req.body.review.state === 'approved') {
+        newEvent = new Event({
+          author: sender.login,
+          from_branch: head.ref,
+          to_branch: base.ref,
+          event_type: 'merge',
+          timestamp: new Date(created_at),
+        });
+      }
+      break;
+
+    default:
+      return res.status(400).send('Unsupported event type');
+  }
+
+  if (newEvent) {
+    await newEvent.save();
+  }
+
+  res.status(200).send('Event received');
+});
+
+// Endpoint to retrieve events
+app.get('/events', async (req, res) => {
+  const events = await Event.find().sort({ timestamp: -1 }).limit(10);
+  res.json(events);
+});
+
+// Start the server
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
