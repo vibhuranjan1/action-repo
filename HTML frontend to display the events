@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Events</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .event { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <h1>GitHub Repository Events</h1>
+    <div id="events"></div>
+    
+    <script>
+        async function fetchEvents() {
+            const response = await fetch('http://localhost:3000/events');
+            const events = await response.json();
+            const eventsDiv = document.getElementById('events');
+            eventsDiv.innerHTML = '';
+            events.forEach(event => {
+                let displayText = '';
+                const timestamp = new Date(event.timestamp).toUTCString();
+                
+                switch (event.event_type) {
+                    case 'push':
+                        displayText = `${event.author} pushed to "${event.to_branch}" on ${timestamp}`;
+                        break;
+                    case 'pull_request':
+                        displayText = `${event.author} submitted a pull request from "${event.from_branch}" to "${event.to_branch}" on ${timestamp}`;
+                        break;
+                    case 'merge':
+                        displayText = `${event.author} merged branch "${event.from_branch}" to "${event.to_branch}" on ${timestamp}`;
+                        break;
+                }
+
+                const eventDiv = document.createElement('div');
+                eventDiv.classList.add('event');
+                eventDiv.textContent = displayText;
+                eventsDiv.appendChild(eventDiv);
+            });
+        }
+
+        setInterval(fetchEvents, 15000); // Poll every 15 seconds
+        fetchEvents(); // Initial fetch
+    </script>
+</body>
+</html>
